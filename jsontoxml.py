@@ -55,7 +55,7 @@ def singlePath(root, thread):
             text = getMessage(msg)
 
             # has attachment
-            if text == None:
+            if text is None:
                 continue
 
             # Time of the message
@@ -139,7 +139,7 @@ def buildGroupConvo(root, thread, user_ids):
             text = getMessage(msg)
 
             # has attachment
-            if text == None:
+            if text is None:
                 continue
 
             # Time of the message
