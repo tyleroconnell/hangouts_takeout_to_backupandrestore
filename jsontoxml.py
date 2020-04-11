@@ -19,7 +19,7 @@ def singlePath(root, thread):
         if 'i18n_data' in participant[0]['phone_number'].keys():
             is_valid = participant[0]['phone_number']['i18n_data']['is_valid']
             if not is_valid:
-                # likely a short code, skip
+                # Skip short code phone numbers
                 return 0
             # name
             name = participant[0]['fallback_name']
@@ -35,11 +35,11 @@ def singlePath(root, thread):
         if 'i18n_data' in participant[1]['phone_number'].keys():
             is_valid = participant[1]['phone_number']['i18n_data']['is_valid']
             if not is_valid:
-                # likely a short code, skip
+                # Skip short code phone numbers
                 return 0
         else:
             return 0
-
+    # Ignoring native Hangouts message threads
     else:
         return 0
 
@@ -51,22 +51,24 @@ def singlePath(root, thread):
             # Inbound/Outbound
             type = getType(msg)
 
-            # This is where the message is located
+            # Content of the message
             text = getMessage(msg)
 
             # has attachment
             if text == None:
                 continue
 
-            # timestamp
+            # Time of the message
             ts = getTimestamp(msg)
 
             if type == 2:
+                # Sent
                 datesent = 0
             else:
+                # Received
                 datesent = ts
 
-            # date
+            # Convert timestamp into date
             date = getReadableDate(ts)
 
             ET.SubElement(root, "sms", protocol="0", address=str(phone), date=str(ts), type=str(type), subject="null", body=str(text), toa="null", sc_toa="null",
@@ -76,8 +78,6 @@ def singlePath(root, thread):
             raise
 
     return message_count
-
-# returns the count of messages
 
 
 def groupPath(root, thread):
@@ -118,7 +118,7 @@ def groupIDs(thread):
     if phone_found:
         return user_ids
     else:
-        # this is a Hangouts thread
+        # Ignoring native Hangouts message threads
         return None
 
 
@@ -129,21 +129,27 @@ def buildGroupConvo(root, thread, user_ids):
         try:
             message_count += 1
 
+            # Sender of the message
             sender_id = msg['sender_id']['chat_id']
 
+            # Determine message type
             type = getType(msg)
 
+            # Content of the message
             text = getMessage(msg)
 
             # has attachment
             if text == None:
                 continue
 
+            # Time of the message
             ts = getTimestamp(msg)
 
             if type == 2:
+                # Sent
                 datesent = 0
             else:
+                # Received
                 datesent = ts
 
             date = getReadableDate(ts)
@@ -163,27 +169,29 @@ def buildGroupConvo(root, thread, user_ids):
                                      ct_t="application/vnd.wap.multipart.related",
                                      seen="1",
                                      text_only="1",
-                                     msg_box=str(type),  # Conveniently, this matches sms values - 2 is outbox, 1 is inbox
+                                     msg_box=str(type),  # SMS type
                                      )
 
             if type == 2:
-                # PduHeaders.RESPONSE_STATUS_OK
+                # Sent
+                mms_root.set("m_type", "128")
+                # PduHeaders.RESPONSE_STATUS_OK (0x80)
                 mms_root.set("resp_st", "128")
-                mms_root.set("m_type", "128")  # sent, maybe?
             else:
-                mms_root.set("m_type", "132")  # hopefully "received"
+                # Received
+                mms_root.set("m_type", "132")
 
             parts = ET.SubElement(mms_root, "parts")
             ET.SubElement(parts, "part", seq="0", ct="text/plain", text=text)
 
             addrs = ET.SubElement(mms_root, "addrs")
             for key, (name, phone) in user_ids.items():
-                # types get weird for mms - they're PDUHeaders values
-                # 151 - PduHeaders.TO
-                # 137 - PduHeaders.FROM
+                # MMS uses PDUHeaders as type
                 if key == sender_id:
+                    # PduHeaders.FROM (0x89)
                     type = "137"
                 else:
+                    # PduHeaders.TO (0x97)
                     type = "151"
                 ET.SubElement(addrs, "addr", address=phone,
                               type=type, charset="106")
@@ -195,27 +203,28 @@ def buildGroupConvo(root, thread, user_ids):
     return message_count
 
 
+# Assuming all messages are 1 = Received or 2 = Sent
+# Ignoring: 3 = Draft, 4 = Outbox, 5 = Failed, 6 = Queued
 def getType(msg):
-    # if print(data['conversations'][238]['events'][1]['sender_id']['gaia_id']) ==
-    # print(data['conversations'][238]['events'][1]['self_event_state']['user_id']['gaia_id']) then 2
-    # else 1
     senderID = msg['sender_id']['gaia_id']
     userID = msg['self_event_state']['user_id']['gaia_id']
+
     if senderID == userID:
-        return 2  # sent by "me"
+        # Sent
+        return 2
     else:
+        # Recieved
         return 1
 
 
 def getMessage(msg):
-
-    # print(data['conversations'][28]['events'][0]['chat_message']['message_content']['segment'][0]['text'])
-    # check that msg contains 'chat_message'
+    # Ensure that msg contians 'chat_message'
     if 'chat_message' not in msg:
         return None
 
     message_content = msg['chat_message']['message_content']
-    # check for pictures
+
+    # Check message for attachments
     text = ""
     if 'attachment' in message_content:
         for attachment in message_content['attachment']:
@@ -223,21 +232,21 @@ def getMessage(msg):
             for type in types:
                 if type == "PLUS_PHOTO":
                     url = attachment["embed_item"]["plus_photo"]["url"]
-                    # strip spaces that for some reason are in there
+                    # Strip unnecessary spaces
                     url = re.sub(r'\s+', '', url)
                     text += url + "\n"
                 elif type == "PLUS_AUDIO_V2":
-                    #These are voicemail transcriptions, and don't seem to be easily turned into a link
-                    #default to info header instead
+                    # Voicemail audio, not easily referencable as link
+                    # Setting an informational header instead
                     text += "Voicemail transcript:\n"
                 elif type == "THING_V2":
                     url = attachment['embed_item']['thing_v2']['url']
-                    # strip spaces that for some reason are in there
+                    # Strip unnecessary spaces
                     url = re.sub(r'\s+', '', url)
 
                     name = attachment['embed_item']['thing_v2'].get('name')
                     text += name if name else 'Attachment' + "\n" + url
-                # thing doesn't seem to ever show up, and place_v2 is always matched by a thing_v2
+                # THING and PLACE_V2 are never the sole attachment type
                 elif type in ('THING', 'PLACE_V2'):
                     continue
                 else:
@@ -253,7 +262,7 @@ def getMessage(msg):
                 text += "\n"
             elif type == "LINK":
                 url = segment['text']
-                # strip spaces that for some reason are in there
+                # Strip unnecessary spaces
                 url = re.sub(r'\s+', '', url)
                 text += url
 
@@ -264,17 +273,12 @@ def getMessage(msg):
 
 
 def getTimestamp(msg):
-
-    # print(data['conversations'][28]['events'][0]['timestamp'])
     ts = int(int(msg['timestamp']) / 1000)
 
     return ts
 
 
 def getReadableDate(ts):
-
-    # ts=data['conversations'][28]['events'][0]['timestamp']
-    # print(datetime.fromtimestamp(int(int(ts) / 1000000)).strftime('%b %d, %Y %I:%M:%S %p'))
     date = datetime.fromtimestamp(
         int(int(ts) / 1000)).strftime('%b %d, %Y %I:%M:%S %p').replace(' 0', ' ')
 
