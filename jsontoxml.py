@@ -61,12 +61,12 @@ def singlePath(root, thread):
             # Time of the message
             ts = getTimestamp(msg)
 
-            if type == 2:
-                # Sent
-                datesent = 0
-            else:
-                # Received
+            if type == 1:
+                # 1 = Received
                 datesent = ts
+            else:
+                # 2 = Sent
+                datesent = 0
 
             # Convert timestamp into date
             date = getReadableDate(ts)
@@ -145,12 +145,12 @@ def buildGroupConvo(root, thread, user_ids):
             # Time of the message
             ts = getTimestamp(msg)
 
-            if type == 2:
-                # Sent
-                datesent = 0
-            else:
+            if type == 1:
                 # Received
                 datesent = ts
+            else:
+                # Sent
+                datesent = 0
 
             date = getReadableDate(ts)
 
@@ -172,14 +172,14 @@ def buildGroupConvo(root, thread, user_ids):
                                      msg_box=str(type),  # SMS type
                                      )
 
-            if type == 2:
+            if type == 1:
+                # Received
+                mms_root.set("m_type", "132")
+            else:
                 # Sent
                 mms_root.set("m_type", "128")
                 # PduHeaders.RESPONSE_STATUS_OK (0x80)
                 mms_root.set("resp_st", "128")
-            else:
-                # Received
-                mms_root.set("m_type", "132")
 
             parts = ET.SubElement(mms_root, "parts")
             ET.SubElement(parts, "part", seq="0", ct="text/plain", text=text)
