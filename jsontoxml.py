@@ -11,29 +11,29 @@ def current_milli_time(): return int(round(time.time() * 1000))
 
 
 def singlePath(root, thread):
-    participant_data = thread['conversation']['conversation']['participant_data']
+    participant = thread["conversation"]["conversation"]["participant_data"]
 
-    if 'phone_number' in participant_data[0].keys():
+    if 'phone_number' in participant[0].keys():
         # number
-        phone = participant_data[0]['phone_number']['e164']
-        if 'i18n_data' in participant_data[0]['phone_number'].keys():
-            is_valid = participant_data[0]['phone_number']['i18n_data']['is_valid']
+        phone = participant[0]['phone_number']['e164']
+        if 'i18n_data' in participant[0]['phone_number'].keys():
+            is_valid = participant[0]['phone_number']['i18n_data']['is_valid']
             if not is_valid:
                 # likely a short code, skip
                 return 0
             # name
-            name = participant_data[0]['fallback_name']
+            name = participant[0]['fallback_name']
         else:
             return 0
     # Unknown case where object 0 has no phone number and is the only object in array. Submitted by reddit user.
-    elif len(thread['conversation']['conversation']['participant_data']) < 2:
+    elif len(thread["conversation"]["conversation"]["participant_data"]) < 2:
         return 0
     # if this fails and it's not a Group message, then it's a hangouts message (or incoming message?)
-    elif 'phone_number' in participant_data[1].keys():
-        phone = participant_data[1]['phone_number']['e164']
-        name = participant_data[1]['fallback_name']
-        if 'i18n_data' in participant_data[1]['phone_number'].keys():
-            is_valid = participant_data[1]['phone_number']['i18n_data']['is_valid']
+    elif 'phone_number' in participant[1].keys():
+        phone = participant[1]['phone_number']['e164']
+        name = participant[1]['fallback_name']
+        if 'i18n_data' in participant[1]['phone_number'].keys():
+            is_valid = participant[1]['phone_number']['i18n_data']['is_valid']
             if not is_valid:
                 # likely a short code, skip
                 return 0
@@ -43,11 +43,11 @@ def singlePath(root, thread):
     else:
         return 0
 
-    count = 0
+    message_count = 0
 
     for msg in thread['events']:
         try:
-            count += 1
+            message_count += 1
             # Inbound/Outbound
             type = getType(msg)
 
@@ -75,7 +75,7 @@ def singlePath(root, thread):
             print(msg)
             raise
 
-    return count
+    return message_count
 
 # returns the count of messages
 
@@ -86,31 +86,33 @@ def groupPath(root, thread):
     if user_ids is None:
         return 0
 
-    count = buildGroupConvo(root, thread, user_ids)
+    message_count = buildGroupConvo(root, thread, user_ids)
 
-    return count
+    return message_count
 
 
 def groupIDs(thread):
     user_ids = {}
 
     phone_found = False
-    for participant_data in thread['conversation']['conversation']['participant_data']:
+    for participant in thread["conversation"]["conversation"][
+        "participant_data"
+    ]:
         try:
-            userID = participant_data['id']['chat_id']
-            if participant_data.get('phone_number'):
+            userID = participant['id']['chat_id']
+            if participant.get('phone_number'):
                 phone_found = True
-                phoneNumber = participant_data['phone_number']['e164']
-                userName = participant_data['fallback_name']
+                phoneNumber = participant['phone_number']['e164']
+                userName = participant['fallback_name']
                 user_ids[userID] = (userName, phoneNumber)
             else:
                 # if this is an mms thread, the owner's phone # will be in "fallback_name" for some reason
                 # so, if we find other numbers, and only one is missing, it should be your own number
-                fallback = participant_data.get("fallback_name")
+                fallback = participant.get("fallback_name")
                 if fallback:
                     user_ids[userID] = (fallback, fallback)
         except Exception:
-            print(participant_data)
+            print(participant)
             raise
 
     if phone_found:
@@ -121,11 +123,11 @@ def groupIDs(thread):
 
 
 def buildGroupConvo(root, thread, user_ids):
-    count = 0
+    message_count = 0
 
     for msg in thread['events']:
         try:
-            count += 1
+            message_count += 1
 
             sender_id = msg['sender_id']['chat_id']
 
@@ -190,7 +192,7 @@ def buildGroupConvo(root, thread, user_ids):
             print(msg)
             raise
 
-    return count
+    return message_count
 
 
 def getType(msg):
@@ -287,20 +289,20 @@ def main():
 
     data = json.loads(datastore)
 
-    root = ET.Element("smses", count=str(
+    root = ET.Element("smses", message_count=str(
         0), backup_set="145bea68-a1f4-4068-a631-06757067e675", backup_date=str(current_milli_time()))
 
-    count = 0
+    message_count = 0
     for thread in data['conversations']:
         # Group message check
-        if len(thread['conversation']['conversation']['participant_data']) > 2:
-            count += groupPath(root, thread)
+        if len(thread["conversation"]["conversation"]["participant_data"]) > 2:
+            message_count += groupPath(root, thread)
         else:
-            count += singlePath(root, thread)
+            message_count += singlePath(root, thread)
 
-    root.set("count", str(count))
+    root.set("count", str(message_count))
     tree = ET.ElementTree(root)
-    tree.write("test.xml")
+    tree.write("Hangouts.xml")
 
 
 main()
